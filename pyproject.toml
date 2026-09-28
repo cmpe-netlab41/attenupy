@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "attenupy"
+version = "1.0.0"
+description = "Design, build, run and harvest penEasy/PENELOPE radiation-shielding simulation studies"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []  # standard library only
+
+[project.optional-dependencies]
+toml = ["tomli; python_version < '3.11'"]  # TOML design files on older Pythons
+spekpy = ["spekpy"]                        # SpekpySpectrum
+
+[project.scripts]
+attenupy = "attenupy.cli:main"
+
+[tool.setuptools]
+packages = ["attenupy"]
+
+[tool.setuptools.package-data]
+attenupy = ["resources/spectra/*.spc"]
