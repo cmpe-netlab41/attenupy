@@ -21,22 +21,27 @@ attenupy doctor                                  # checks both, incl. OS/CPU mis
 
 ```python
 import attenupy as atp
-atp.log_to_console()
+atp.log_to_console()   # print progress ("Prepared N folders...", etc.) as the study runs
 
+# A design is just a list of simulations to create; RandomSampler draws them
+# randomly (n per beam), ThicknessSweep sweeps fixed mixtures over thicknesses,
+# and the two combine with `+` into one design (see "Designs" below for more).
 design = atp.RandomSampler(
-    n=300,                                         # per beam
+    n=300,                                         # simulations to draw, per beam
     beams=["RQR6_080", "RQR8_100", "x120kV"],      # or "80", "100kV", ...
     constituents=["Bi2O3", "BaSO4", "BN", "B4C", "WO3", "Sb", "Sn", "Bi", "W", "Cu", "B", "Ba"],
-    n_constituents=[1, 2, 3],                      # or {2: 0.7, 3: 0.3}
-    polymer_fractions=[0.20, 0.30, 0.40],
-    thicknesses_mm=atp.thickness_range(0.15, 1.5, 0.15),
-    seed=0,
+    n_constituents=[1, 2, 3],                      # 1-3 constituents per mixture; or {2: 0.7, 3: 0.3}
+    polymer_fractions=[0.20, 0.30, 0.40],          # candidate polymer (matrix) weight fractions
+    thicknesses_mm=atp.thickness_range(0.15, 1.5, 0.15),  # 0.15, 0.30, ..., 1.50 mm
+    seed=0,                                        # reproducible random draw
 )
 held_out = atp.ThicknessSweep(atp.Mixture({"Bi2O3": 0.40, "BaSO4": 0.20}, polymer_fraction=0.40),
                              atp.thickness_range(0.15, 1.5, 0.15), beams=["RQR6_080"])
 
-study = atp.Study("runs/paper")        # executables from the environment
-study.prepare(design + held_out)      # everything each folder needs
+# A Study ties a design to a directory; with no toolchain= it reads penEasy.x
+# and material.exe from the ATTENUPY_PENEASY / ATTENUPY_MATERIAL env vars set above.
+study = atp.Study("runs/paper")
+study.prepare(design + held_out)      # `+` concatenates the designs; writes every folder's inputs
 study.run(max_concurrent=10)          # resumable; safe with several jobs at once
 study.collect(output="results.csv")   # molecule_i / ratio_i columns by default
 ```
@@ -52,6 +57,15 @@ attenupy collect runs/paper -o results.csv            # --tidy for w_<name> colu
 ```
 
 ## Examples
+
+New here? Read them in this order: [`03_gd_pb_sweep.py`](examples/03_gd_pb_sweep.py)
+is the shortest complete example (design → prepare → run → collect in ~20
+lines of actual code); [`01_paper_dataset.py`](examples/01_paper_dataset.py)
+shows a full study with a random design plus held-out curves; and
+[`02_extending.py`](examples/02_extending.py) shows how to plug in your own
+spectrum, splitter, sampler and result column. Every script is heavily
+commented and runnable as-is — `atp.log_to_console()` at the top of each
+prints its progress so you can see what it's doing.
 
 | file | what it does |
 |---|---|
@@ -141,9 +155,32 @@ plus `<root>/.attenupy/` for the material cache and provenance.
 
 `energy_ratio` = detector energy / I0, where I0 is the detector signal with
 the slab replaced by air. The five bundled beams carry I0 values valid for
-the default geometry. For a new beam or geometry, run
-`study.prepare_references()` (or `attenupy references ROOT`): this adds an air
-run per beam, and once it has run its measured I0 takes precedence.
+the default geometry, so nothing else is needed to collect `energy_ratio`
+for them.
+
+For any other beam -- one you registered yourself, or a bundled beam used
+with a non-default geometry -- I0 isn't known yet, and `collect()` can't
+just guess it. Compute it by adding an air-reference simulation and running
+it, the same way as any other simulation:
+
+```python
+study.prepare(design)                 # your actual composite simulations
+study.prepare_references()            # + one air-filled run per beam used above
+study.run(max_concurrent=10)          # runs both together
+study.collect(output="results.csv")   # I(t) for the composites, I0 from the air runs
+```
+
+`prepare_references(beams=None, thickness_mm=0.30)` defaults to every beam
+already used in the study, at a 0.30 mm air "slab" -- the exact thickness
+barely matters, since air attenuates negligibly at these energies over a few
+millimetres. Pass `beams=["W60"]` to add a reference for specific beams only;
+`attenupy references ROOT` does the same from the CLI.
+
+Once a reference run for a beam has finished, `collect()` uses its measured
+I0 automatically and in preference to any baked-in value -- there's nothing
+extra to tell it. If neither a measured nor a baked-in I0 exists for a beam,
+`collect()` prints a one-line warning and leaves that beam's `energy_ratio`
+column empty rather than guessing at a number.
 
 ### Running
 

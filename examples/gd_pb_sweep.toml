@@ -1,14 +1,20 @@
-# Gd and Pb (70 wt%) in C2H4 (30 wt%) at 100 kV, 10 thicknesses: 20 simulations.
-# Same design as examples/03_gd_pb_sweep.py.
+# Gd and Pb (70 wt% each) in a 30 wt% C2H4 matrix, at 100 kV, swept over 10
+# thicknesses (0.15 to 1.50 mm): 20 simulations in total. Same design as the
+# Python version, examples/03_gd_pb_sweep.py -- use whichever you prefer.
 #
+# Preview what would be created, without writing anything:
 #   attenupy prepare runs/gd_pb --design examples/gd_pb_sweep.toml --dry-run
+# Actually create the folders:
 #   attenupy prepare runs/gd_pb --design examples/gd_pb_sweep.toml
+# Then run and collect like any other study:
+#   attenupy run runs/gd_pb --max-concurrent 10
+#   attenupy collect runs/gd_pb -o results.csv
 
 [[design]]
-type = "sweep"
-beams = ["RQR8_100"]
-thicknesses_mm = { start = 0.15, stop = 1.5, step = 0.15 }
+type = "sweep"                          # ThicknessSweep: every mixture x every thickness x every beam
+beams = ["RQR8_100"]                    # 100 kV
+thicknesses_mm = { start = 0.15, stop = 1.5, step = 0.15 }   # 0.15, 0.30, ..., 1.50 mm
 mixtures = [
-  { fractions = { Gd = 0.70 }, polymer_fraction = 0.30 },
-  { fractions = { Pb = 0.70 }, polymer_fraction = 0.30 },
+  { fractions = { Gd = 0.70 }, polymer_fraction = 0.30 },   # 70% Gd, 30% C2H4
+  { fractions = { Pb = 0.70 }, polymer_fraction = 0.30 },   # 70% Pb, 30% C2H4
 ]

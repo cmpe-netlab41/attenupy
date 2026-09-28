@@ -1,44 +1,76 @@
-# attenupy design file:  attenupy prepare runs/paper --design examples/design.toml
-# (add --dry-run first to see what would be created)
+# attenupy design file: describes a set of simulations declaratively, as an
+# alternative to writing a Python script like examples/01_paper_dataset.py.
+# Run it with:
+#
+#   attenupy prepare runs/paper --design examples/design.toml --dry-run   # preview only, writes nothing
+#   attenupy prepare runs/paper --design examples/design.toml             # actually create the folders
+#
+# A design file has three kinds of top-level table, all optional except
+# [[design]]:
+#   [constituents]  -- extra shielding compounds/elements beyond the built-in ones
+#   [[beams]]       -- extra X-ray tube settings beyond the five built-in ones
+#   [[design]]      -- one or more sampler blocks; their simulations are all
+#                       concatenated together (like `+` between samplers in Python)
 
-# Constituents beyond the built-in ones (Bi2O3 BaSO4 BN B4C WO3 Sb Sn Bi W Cu B Ba Pb Gd).
+# --- Extra constituents ------------------------------------------------------
+# Built in: Bi2O3 BaSO4 BN B4C WO3 Sb Sn Bi W Cu B Ba Pb Gd (see
+# atp.DEFAULT_CONSTITUENTS in Python). Add anything else here as
+# `name = density`, or `name = { density = ..., formula = "..." }` if the
+# name isn't itself a valid chemical formula (e.g. a polymer nickname).
 [constituents]
 Gd2O3 = 7.41
 
-# Beams beyond the paper's five (N30_030, RQR5_070, RQR6_080, RQR8_100, x120kV).
-# [[beams]]
+# --- Extra beams --------------------------------------------------------------
+# Built in: N30_030 (30 kV), RQR5_070 (70 kV), RQR6_080 (80 kV), RQR8_100
+# (100 kV), x120kV (120 kV), each with a bundled spectrum. Uncomment one of
+# the patterns below to add a beam of your own.
+#
+# [[beams]]                            # a spectrum from a file you already have
 # key = "W60"
 # kvp = 60
-# spectrum = "spectra/W60.spc"      # relative to this file
+# spectrum = "spectra/W60.spc"         # path to a .spc file, relative to this file
 #
-# ...or computed with SpekPy (pip install spekpy); kvp is taken from the beam:
+# ...or compute the spectrum with SpekPy (pip install spekpy) instead of
+# supplying a file; kvp is taken from the beam automatically:
 # [[beams]]
 # key = "RQR5_spekpy"
 # kvp = 70
-# folder = "70kV_spekpy"
+# folder = "70kV_spekpy"               # subfolder name under the study root
 # spectrum = { type = "spekpy", th = 12, filters = [["Al", 2.8], ["Be", 3.0]], dk = 1.0 }
+
+# --- The design itself --------------------------------------------------------
+# Each [[design]] block below is one sampler. `type` selects which kind:
+#   "random" -> RandomSampler   (n random mixtures per beam)
+#   "sweep"  -> ThicknessSweep  (given mixture(s), every thickness in a list)
+#   "grid"   -> GridSampler     (every beam x mixture x thickness combination)
+#   "csv"    -> CSVSampler      (read simulations from a CSV file)
+# All the [[design]] blocks are concatenated into one combined design, the
+# same way `sampler_a + sampler_b` works in a Python script.
 
 # 1) Training set: 300 random composites per beam, one random thickness each.
 [[design]]
 type = "random"
-n = 300
+n = 300                                # simulations to draw, per beam
 beams = ["RQR6_080", "RQR8_100", "x120kV"]
 constituents = ["Bi2O3", "BaSO4", "BN", "B4C", "WO3", "Sb", "Sn", "Bi", "W", "Cu", "B", "Ba"]
-n_constituents = [1, 2, 3]            # or { 2 = 0.7, 3 = 0.3 }
-polymer_fractions = [0.20, 0.30, 0.40]
-thicknesses_mm = { start = 0.15, stop = 1.5, step = 0.15 }
-seed = 0
+n_constituents = [1, 2, 3]              # 1-3 constituents per mixture; or { 2 = 0.7, 3 = 0.3 } for weighted odds
+polymer_fractions = [0.20, 0.30, 0.40]  # candidate polymer (matrix) weight fractions
+thicknesses_mm = { start = 0.15, stop = 1.5, step = 0.15 }   # 0.15, 0.30, ..., 1.50 mm
+seed = 0                                # fixes the random draw so it's reproducible
 # splitter = { type = "dirichlet", alpha = { B = 2.5, Ba = 2.5 }, min_share = 0.1 }
-# require_any = ["B", "Ba"]
+# require_any = ["B", "Ba"]             # every mixture must contain at least one of these
 
-# 2) Held-out curve: one composition at every thickness.
+# 2) Held-out curve: one fixed composition, simulated at every thickness (to
+#    see how well a model trained on (1) generalises across thickness).
 [[design]]
 type = "sweep"
 beams = ["RQR6_080"]
 thicknesses_mm = { start = 0.15, stop = 1.5, step = 0.15 }
 mixtures = [ { fractions = { Bi2O3 = 0.40, BaSO4 = 0.20 }, polymer_fraction = 0.40 } ]
 
-# 3) Six random compositions, each swept over the thickness list.
+# 3) Six random compositions, each swept over the same thickness list, so
+#    every composition gets a full transmission-vs-thickness curve instead
+#    of just a single random point.
 [[design]]
 type = "sweep"
 beams = ["RQR8_100"]
