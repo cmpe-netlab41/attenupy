@@ -2,7 +2,10 @@
 
 Design, build, run and harvest **penEasy/PENELOPE** radiation-shielding studies
 of polymer composites, from "I want 300 random 1–3-constituent mixtures per
-beam" to a CSV of transmission ratios.
+beam" to a CSV of transmission ratios. This is the dataset-generation
+pipeline behind [STAR-XPC](https://huggingface.co/cmpe-netlab41/STAR-XPC), a
+Set Transformer model for X-ray transmission through polymer/shielder
+composites.
 
 You supply two executables built for your machine: `penEasy.x` and
 PENELOPE's `material.exe` (in its `pendbase/`, next to `pdfiles/`).
@@ -16,6 +19,24 @@ export ATTENUPY_PENEASY=/path/to/penEasy.x
 export ATTENUPY_MATERIAL=/path/to/pendbase/material.exe
 attenupy doctor                                  # checks both, incl. OS/CPU mismatch
 ```
+
+## Status
+
+The design used for [STAR-XPC](https://huggingface.co/cmpe-netlab41/STAR-XPC)'s
+training set -- [`examples/01_paper_dataset.py`](examples/01_paper_dataset.py):
+`RandomSampler` + `ThicknessSweep`, the default slab geometry, the five
+bundled spectra, the penEasy deck, and material generation -- has been
+checked closely: the `penEasy.in`, `.geo`, `.spc` and `mat.mat`/`Aire.mat`
+files it produces are byte-identical to the historical simulation folders it
+replaces, and `mat.mat` was built with the real `material.exe`.
+
+Everything past that design -- the extension points (custom splitters,
+samplers, geometries, namers, result columns), SpekPy-based spectra,
+`CSVSampler` with a custom `parse_row`, non-default geometries, and most CLI
+paths -- has unit-test coverage but hasn't been run at scale or checked
+against real simulation output. Treat that part of the library as less
+mature: inspect a small run's actual files before relying on it for a new
+study.
 
 ## Quick start
 
